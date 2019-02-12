@@ -20,9 +20,11 @@ type Chrome struct {
 	status <-chan cmd.Status
 	// port on which chrome process is listening for dev tools protocol
 	port *int
+
+	version *dt.Version
 }
 
-func (c *Chrome) Launch(path string, port *int,arguments []*string) error {
+func (c *Chrome) Launch(path string, port *int, arguments []*string) error {
 	// if port is not specified, default to 9222
 	if port == nil {
 		c.port = Int(9222)
@@ -77,7 +79,7 @@ func (c *Chrome) OpenTab(timeout time.Duration) (*Tab, error) {
 	defer cancel()
 
 	// Initiate a new RPC connection to the Chrome DevTools Protocol target.
-	conn, err := rpcc.DialContext(ctx, c.target.WebSocketDebuggerURL)
+	conn, err := rpcc.DialContext(ctx, c.version.WebSocketDebuggerURL)
 	if err != nil {
 		return nil, err
 	}
@@ -110,7 +112,7 @@ func (c *Chrome) CloseTab(tab *Tab, timeout time.Duration) error {
 	defer cancel()
 
 	// Initiate a new RPC connection to the Chrome DevTools Protocol target.
-	conn, err := rpcc.DialContext(ctx, c.target.WebSocketDebuggerURL)
+	conn, err := rpcc.DialContext(ctx, c.version.WebSocketDebuggerURL)
 	if err != nil {
 		return err
 	}
@@ -127,17 +129,11 @@ func (c *Chrome) connect(timeout time.Duration) (err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	// create new devtools client
-	client := dt.New(fmt.Sprintf("http://127.0.0.1:%v", IntValue(c.port)))
-
-	// open page and get target
-
-	//c.target, err = client.Get(ctx, dt.Page)
-	//if err != nil {
-	c.target, err = client.Create(ctx)
+	// get version for chrome instance to access debugger URL
+	c.version, err = dt.New(fmt.Sprintf("http://127.0.0.1:%v", IntValue(c.port))).Version(ctx)
 	if err != nil {
 		return
 	}
-	//}
+
 	return
 }
