@@ -12,15 +12,15 @@ import (
 )
 
 type Tab struct {
-	// target id of a single tab
-	id tgt.ID
+	// target Id of a single tab
+	Id tgt.ID
 }
 
 func (t *Tab) Navigate(url string, timeout time.Duration) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	conn, err := rpcc.DialContext(ctx, "ws://127.0.0.1:9222/devtools/page/"+ string(t.id))
+	conn, err := rpcc.DialContext(ctx, "ws://127.0.0.1:9222/devtools/page/"+ string(t.Id))
 	if err != nil {
 		return "", err
 	}
@@ -36,7 +36,7 @@ func (t *Tab) Navigate(url string, timeout time.Duration) (string, error) {
 	}
 	defer domContent.Close()
 
-	// Enable events on the Page domain, it's often preferrable to create
+	// Enable events on the Page domain, it's often preferable to create
 	// event clients before enabling events so that we don't miss any.
 	if err = c.Page.Enable(ctx); err != nil {
 		return "", err

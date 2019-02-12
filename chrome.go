@@ -12,15 +12,13 @@ import (
 )
 
 type Chrome struct {
-	// chrome browser target
-	target *dt.Target
 	// command object to manage chrome process
 	command *cmd.Cmd
 	// chrome process status
 	status <-chan cmd.Status
 	// port on which chrome process is listening for dev tools protocol
 	port *int
-
+	// devtools protocol version
 	version *dt.Version
 }
 
@@ -102,7 +100,7 @@ func (c *Chrome) OpenTab(timeout time.Duration) (*Tab, error) {
 	}
 
 	tab = &Tab{}
-	tab.id = createTarget.TargetID
+	tab.Id = createTarget.TargetID
 
 	return tab, nil
 }
@@ -120,7 +118,7 @@ func (c *Chrome) CloseTab(tab *Tab, timeout time.Duration) error {
 
 	client := cdp.NewClient(conn)
 
-	_, err = client.Target.CloseTarget(ctx, tgt.NewCloseTargetArgs(tab.id))
+	_, err = client.Target.CloseTarget(ctx, tgt.NewCloseTargetArgs(tab.Id))
 	return err
 }
 
