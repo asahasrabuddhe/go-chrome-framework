@@ -41,6 +41,7 @@ func (c *Chrome) Launch(path string, port *int, arguments []*string) error {
 		"--disable-extensions",
 		"--disable-default-apps",
 		"--disable-background-networking",
+		"--disable-popup-blocking",
 		"--safebrowsing-disable-auto-update",
 		"--mute-audio",
 		"--no-first-run",
@@ -85,6 +86,7 @@ func (c *Chrome) OpenTab(timeout time.Duration) (*Tab, error) {
 
 	client := cdp.NewClient(conn)
 
+	_ = client.Target.SetDiscoverTargets(ctx, &tgt.SetDiscoverTargetsArgs{Discover: true})
 	createCtx, err := client.Target.CreateBrowserContext(ctx)
 	if err != nil {
 		return nil, err
