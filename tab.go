@@ -17,8 +17,8 @@ type Tab struct {
 	Id tgt.ID
 	// connection to connect with the browser
 	conn *rpcc.Conn
-	// client to control the browser
-	client *cdp.Client
+	// Client to control the browser
+	Client *cdp.Client
 }
 
 func (t *Tab) connect(timeout time.Duration) error {
@@ -32,8 +32,8 @@ func (t *Tab) connect(timeout time.Duration) error {
 		return err
 	}
 
-	// This cdp client controls the "incognito tab".
-	t.client = cdp.NewClient(t.conn)
+	// This cdp Client controls the "incognito tab".
+	t.Client = cdp.NewClient(t.conn)
 	return nil
 }
 
@@ -52,8 +52,8 @@ func (t *Tab) Navigate(url string, timeout time.Duration) (bool, error) {
 
 	defer t.disconnect()
 
-	// Open a DOMContentEventFired client to buffer this event.
-	domContent, err := t.client.Page.DOMContentEventFired(ctx)
+	// Open a DOMContentEventFired Client to buffer this event.
+	domContent, err := t.Client.Page.DOMContentEventFired(ctx)
 	if err != nil {
 		return false, err
 	}
@@ -61,13 +61,13 @@ func (t *Tab) Navigate(url string, timeout time.Duration) (bool, error) {
 
 	// Enable events on the Page domain, it's often preferable to create
 	// event clients before enabling events so that we don't miss any.
-	if err = t.client.Page.Enable(ctx); err != nil {
+	if err = t.Client.Page.Enable(ctx); err != nil {
 		return false, err
 	}
 
 	// Create the Navigate arguments with the optional Referrer field set.
 	navArgs := page.NewNavigateArgs(url)
-	nav, err := t.client.Page.Navigate(ctx, navArgs)
+	nav, err := t.Client.Page.Navigate(ctx, navArgs)
 	if err != nil {
 		return false, err
 	}
@@ -98,13 +98,13 @@ func (t *Tab) GetHTML(timeout time.Duration) (string, error) {
 
 	// Fetch the document root node. We can pass nil here
 	// since this method only takes optional arguments.
-	doc, err := t.client.DOM.GetDocument(ctx, nil)
+	doc, err := t.Client.DOM.GetDocument(ctx, nil)
 	if err != nil {
 		return "", err
 	}
 
 	// Get the outer HTML for the page.
-	result, err := t.client.DOM.GetOuterHTML(ctx, &dom.GetOuterHTMLArgs{
+	result, err := t.Client.DOM.GetOuterHTML(ctx, &dom.GetOuterHTMLArgs{
 		NodeID: &doc.Root.NodeID,
 	})
 	if err != nil {
@@ -126,30 +126,5 @@ func (t *Tab) Exec(javascript string, timeout time.Duration) (*runtime.EvaluateR
 	defer t.disconnect()
 
 	evalArgs := runtime.NewEvaluateArgs(javascript).SetAwaitPromise(true).SetReturnByValue(true)
-	return t.client.Runtime.Evaluate(ctx, evalArgs)
-}
-
-func (t *Tab) GetNewTab(timeout time.Duration) (*Tab, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	newTarget, err := t.client.Target.TargetCreated(ctx)
-	if err != nil {
-		return nil, err
-	} else {
-		<-newTarget.Ready()
-
-		res, _ := newTarget.Recv()
-		if res.TargetInfo.Type == "page" {
-			var tab Tab
-
-			tab.Id = res.TargetInfo.TargetID
-			tab.conn = t.conn
-			tab.client = t.client
-
-			return &tab, nil
-		} else {
-			return nil, nil
-		}
-	}
+	return t.Client.Runtime.Evaluate(ctx, evalArgs)
 }
