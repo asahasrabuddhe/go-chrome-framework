@@ -3,23 +3,21 @@ package chrome
 import (
 	"context"
 	"fmt"
-	"github.com/go-cmd/cmd"
 	"github.com/mafredri/cdp"
 	dt "github.com/mafredri/cdp/devtool"
 	tgt "github.com/mafredri/cdp/protocol/target"
 	"github.com/mafredri/cdp/rpcc"
+	"os/exec"
 	"time"
 )
 
 type Chrome struct {
 	// command object to manage chrome process
-	command *cmd.Cmd
-	// chrome process status
-	status <-chan cmd.Status
+	command *exec.Cmd
 	// port on which chrome process is listening for dev tools protocol
 	port *int
 	// devtools protocol version
-	version *dt.Version
+	Version *dt.Version
 }
 
 func (c *Chrome) Launch(path string, port *int, arguments []*string) error {
@@ -56,9 +54,12 @@ func (c *Chrome) Launch(path string, port *int, arguments []*string) error {
 	}
 
 	// create command with chrome path and arguments
-	c.command = cmd.NewCmd(path, defaultArguments...)
+	c.command = exec.Command(path, defaultArguments...)
 	// launch chrome process
-	c.status = c.command.Start()
+	err := c.command.Start()
+	if err != nil {
+		// error occurred
+	}
 	// wait for chrome to launch
 	time.Sleep(5 * time.Second)
 	// attempt to connect with chrome over dev tools protocol
@@ -66,11 +67,14 @@ func (c *Chrome) Launch(path string, port *int, arguments []*string) error {
 }
 
 func (c *Chrome) Wait() {
-	<-c.status
+	err := c.command.Wait()
+	if err != nil {
+		// error
+	}
 }
 
 func (c *Chrome) Terminate() error {
-	return c.command.Stop()
+	return c.command.Process.Kill()
 }
 
 func (c *Chrome) OpenTab(timeout time.Duration) (*Tab, error) {
@@ -78,7 +82,7 @@ func (c *Chrome) OpenTab(timeout time.Duration) (*Tab, error) {
 	defer cancel()
 
 	// Initiate a new RPC connection to the Chrome DevTools Protocol target.
-	conn, err := rpcc.DialContext(ctx, c.version.WebSocketDebuggerURL)
+	conn, err := rpcc.DialContext(ctx, c.Version.WebSocketDebuggerURL)
 	if err != nil {
 		return nil, err
 	}
@@ -86,14 +90,13 @@ func (c *Chrome) OpenTab(timeout time.Duration) (*Tab, error) {
 
 	client := cdp.NewClient(conn)
 
-	_ = client.Target.SetDiscoverTargets(ctx, &tgt.SetDiscoverTargetsArgs{Discover: true})
-	createCtx, err := client.Target.CreateBrowserContext(ctx)
+	createCtx, err := client.Target.GetBrowserContexts(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	createTargetArgs := tgt.NewCreateTargetArgs("about:blank").
-		SetBrowserContextID(createCtx.BrowserContextID)
+		SetBrowserContextID(createCtx.BrowserContextIDs[0])
 
 	var tab *Tab
 	createTarget, err := client.Target.CreateTarget(ctx, createTargetArgs)
@@ -112,7 +115,7 @@ func (c *Chrome) CloseTab(tab *Tab, timeout time.Duration) error {
 	defer cancel()
 
 	// Initiate a new RPC connection to the Chrome DevTools Protocol target.
-	conn, err := rpcc.DialContext(ctx, c.version.WebSocketDebuggerURL)
+	conn, err := rpcc.DialContext(ctx, c.Version.WebSocketDebuggerURL)
 	if err != nil {
 		return err
 	}
@@ -130,7 +133,7 @@ func (c *Chrome) connect(timeout time.Duration) (err error) {
 	defer cancel()
 
 	// get version for chrome instance to access debugger URL
-	c.version, err = dt.New(fmt.Sprintf("http://127.0.0.1:%v", IntValue(c.port))).Version(ctx)
+	c.Version, err = dt.New(fmt.Sprintf("http://127.0.0.1:%v", IntValue(c.port))).Version(ctx)
 	if err != nil {
 		return
 	}
