@@ -32,7 +32,6 @@ func (c *Chrome) Launch(path string, port *int, arguments []*string) error {
 	defaultArguments := []string{
 		"--headless",
 		fmt.Sprintf("--remote-debugging-port=%v", IntValue(c.port)),
-		"--no-sandbox",
 		"--disable-gpu",
 		"--disable-sync",
 		"--disable-translate",
