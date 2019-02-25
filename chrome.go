@@ -81,7 +81,7 @@ func (c *Chrome) Launch(path string, port *int, arguments []*string) (*Tab, erro
 func (c *Chrome) Wait() {
 	err := c.command.Wait()
 	if err != nil {
-		log.Fatalln("go-chrome-framework error: premature exit", err.Error())
+		log.Println("go-chrome-framework error: premature exit", err.Error())
 	}
 }
 
@@ -89,7 +89,19 @@ func (c *Chrome) Terminate() error {
 	return c.command.Process.Kill()
 }
 
-func (c *Chrome) OpenTab(timeout time.Duration) (*Tab, error) {
+func (c *Chrome) OpenTab(targetID tgt.ID, timeout time.Duration) *Tab {
+	_, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	// wrap the tab in an object and return
+	tab := new(Tab)
+
+	tab.id = targetID
+	tab.port = c.port
+
+	return tab
+}
+
+func (c *Chrome) OpenNewTab(timeout time.Duration) (*Tab, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
@@ -109,7 +121,7 @@ func (c *Chrome) OpenTab(timeout time.Duration) (*Tab, error) {
 	return tab, nil
 }
 
-func (c *Chrome) OpenIncognitoTab(timeout time.Duration) (*Tab, error) {
+func (c *Chrome) OpenNewIncognitoTab(timeout time.Duration) (*Tab, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
