@@ -204,14 +204,16 @@ func (t *Tab) Exec(javascript string, timeout time.Duration) (*runtime.EvaluateR
 		return nil, err
 	}
 
-	defer t.disconnect()
-
 	evalArgs := runtime.NewEvaluateArgs(javascript).SetAwaitPromise(true).SetReturnByValue(true)
 	return t.client.Runtime.Evaluate(ctx, evalArgs)
 }
 
 func (t *Tab) GetClient() *cdp.Client {
 	return t.client
+}
+
+func (t *Tab) GetTargetID() tgt.ID {
+	return t.id
 }
 
 func (t *Tab) AttachHook(hook ClientHook) {
