@@ -70,12 +70,12 @@ func (t *Tab) Navigate(url string, timeout time.Duration) (bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	err := t.connect(timeout)
-	if err != nil {
-		return false, err
+	if t.conn == nil {
+		err := t.connect(timeout)
+		if err != nil {
+			return false, err
+		}
 	}
-
-	defer t.disconnect()
 
 	// Open a DOMContentEventFired Client to buffer this event.
 	domContent, err := t.client.Page.DOMContentEventFired(ctx)
@@ -118,12 +118,12 @@ func (t *Tab) GetHTML(timeout time.Duration) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	err := t.connect(timeout)
-	if err != nil {
-		return "", err
+	if t.conn == nil {
+		err := t.connect(timeout)
+		if err != nil {
+			return "", err
+		}
 	}
-
-	defer t.disconnect()
 
 	// Fetch the document root node. We can pass nil here
 	// since this method only takes optional arguments.
@@ -149,11 +149,12 @@ func (t *Tab) CaptureScreenshot(timeout time.Duration) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	err := t.connect(timeout)
-	if err != nil {
-		return "", err
+	if t.conn == nil {
+		err := t.connect(timeout)
+		if err != nil {
+			return "", err
+		}
 	}
-	defer t.disconnect()
 
 	// Fetch the document root node. We can pass nil here
 	// since this method only takes optional arguments.
@@ -199,9 +200,11 @@ func (t *Tab) Exec(javascript string, timeout time.Duration) (*runtime.EvaluateR
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	err := t.connect(timeout)
-	if err != nil {
-		return nil, err
+	if t.conn == nil {
+		err := t.connect(timeout)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	evalArgs := runtime.NewEvaluateArgs(javascript).SetAwaitPromise(true).SetReturnByValue(true)
