@@ -2,24 +2,35 @@ package chrome
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"github.com/mafredri/cdp"
 	"github.com/mafredri/cdp/protocol/dom"
+	"github.com/mafredri/cdp/protocol/emulation"
 	"github.com/mafredri/cdp/protocol/page"
 	"github.com/mafredri/cdp/protocol/runtime"
 	tgt "github.com/mafredri/cdp/protocol/target"
 	"github.com/mafredri/cdp/rpcc"
+	"log"
 	"time"
 )
 
 type Tab struct {
-	// target Id of a single tab
-	Id tgt.ID
+	// target id of a single tab
+	id tgt.ID
+	// port on which chrome process is listening for dev tools protocol
+	port *int
 	// connection to connect with the browser
 	conn *rpcc.Conn
 	// client to control the browser
 	client *cdp.Client
+	// hooks to attach additional functionality to client, enable domains etc
+	hooks ClientHooks
 }
+
+type ClientHook func(c *cdp.Client) error
+
+type ClientHooks []ClientHook
 
 func (t *Tab) connect(timeout time.Duration) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -27,13 +38,27 @@ func (t *Tab) connect(timeout time.Duration) error {
 
 	var err error
 	// connect to chrome
-	t.conn, err = rpcc.DialContext(ctx, "ws://127.0.0.1:9222/devtools/page/"+string(t.Id))
+	t.conn, err = rpcc.DialContext(
+		ctx,
+		fmt.Sprintf("ws://127.0.0.1:%v/devtools/page/%v", IntValue(t.port), t.id),
+	)
 	if err != nil {
+		log.Println("go-chrome-framework error: unable to connect to target", err.Error())
 		return err
 	}
 
-	// This cdp client controls the "incognito tab".
+	// This cdp Client controls the tab.
 	t.client = cdp.NewClient(t.conn)
+
+	// execute hooks for current target
+	for _, hook := range t.hooks {
+		err := hook(t.client)
+		if err != nil {
+			log.Println("go-chrome-framework error: unable to execute hook", err.Error())
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -52,9 +77,10 @@ func (t *Tab) Navigate(url string, timeout time.Duration) (bool, error) {
 
 	defer t.disconnect()
 
-	// Open a DOMContentEventFired client to buffer this event.
+	// Open a DOMContentEventFired Client to buffer this event.
 	domContent, err := t.client.Page.DOMContentEventFired(ctx)
 	if err != nil {
+		log.Println("go-chrome-framework error: unable to open dom content event fired client", err.Error())
 		return false, err
 	}
 	defer domContent.Close()
@@ -62,6 +88,7 @@ func (t *Tab) Navigate(url string, timeout time.Duration) (bool, error) {
 	// Enable events on the Page domain, it's often preferable to create
 	// event clients before enabling events so that we don't miss any.
 	if err = t.client.Page.Enable(ctx); err != nil {
+		log.Println("go-chrome-framework error: unable to enable page domain", err.Error())
 		return false, err
 	}
 
@@ -69,11 +96,13 @@ func (t *Tab) Navigate(url string, timeout time.Duration) (bool, error) {
 	navArgs := page.NewNavigateArgs(url)
 	nav, err := t.client.Page.Navigate(ctx, navArgs)
 	if err != nil {
+		log.Println("go-chrome-framework error: unable to navigate to given url", err.Error())
 		return false, err
 	}
 
 	// Wait until we have a DOMContentEventFired event.
 	if _, err = domContent.Recv(); err != nil {
+		log.Println("go-chrome-framework error: unable to get dom content event", err.Error())
 		return false, err
 	}
 
@@ -100,6 +129,7 @@ func (t *Tab) GetHTML(timeout time.Duration) (string, error) {
 	// since this method only takes optional arguments.
 	doc, err := t.client.DOM.GetDocument(ctx, nil)
 	if err != nil {
+		log.Println("go-chrome-framework error: unable to get DOM root node", err.Error())
 		return "", err
 	}
 
@@ -108,10 +138,61 @@ func (t *Tab) GetHTML(timeout time.Duration) (string, error) {
 		NodeID: &doc.Root.NodeID,
 	})
 	if err != nil {
+		log.Println("go-chrome-framework error: unable to get outer html", err.Error())
 		return "", err
 	}
 
 	return result.OuterHTML, nil
+}
+
+func (t *Tab) CaptureScreenshot(timeout time.Duration) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	err := t.connect(timeout)
+	if err != nil {
+		return "", err
+	}
+	defer t.disconnect()
+
+	// Fetch the document root node. We can pass nil here
+	// since this method only takes optional arguments.
+	doc, err := t.client.DOM.GetDocument(ctx, nil)
+	if err != nil {
+		log.Println("go-chrome-framework error: unable to get DOM root node", err.Error())
+		return "", err
+	}
+
+	querySelectorArgs := dom.NewQuerySelectorArgs(doc.Root.NodeID, "body")
+	bodyNode, err := t.client.DOM.QuerySelector(ctx, querySelectorArgs)
+	if err != nil {
+		log.Println("go-chrome-framework error: unable to get DOM root node", err.Error())
+		return "", err
+	}
+
+	getBoxModelArgs := dom.NewGetBoxModelArgs().SetNodeID(bodyNode.NodeID)
+	bodyBoxModel, err := t.client.DOM.GetBoxModel(ctx, getBoxModelArgs)
+	if err != nil {
+		log.Println("go-chrome-framework error: unable to get DOM root node", err.Error())
+		return "", err
+	}
+
+	deviceMetricsOverrideArgs := emulation.NewSetDeviceMetricsOverrideArgs(800, bodyBoxModel.Model.Height, 1.0, false)
+	err = t.client.Emulation.SetDeviceMetricsOverride(ctx, deviceMetricsOverrideArgs)
+
+	visibleSizeArgs := emulation.NewSetVisibleSizeArgs(800, bodyBoxModel.Model.Height)
+	err = t.client.Emulation.SetVisibleSize(ctx, visibleSizeArgs)
+
+	screenshotArgs := page.NewCaptureScreenshotArgs().SetFormat("png").SetQuality(80)
+	screenshot, err := t.client.Page.CaptureScreenshot(ctx, screenshotArgs)
+	if err != nil {
+		// error
+		return "", err
+	}
+
+	image := fmt.Sprintf("data:image/png;base64,%v", base64.StdEncoding.EncodeToString(screenshot.Data))
+
+	return image, nil
 }
 
 func (t *Tab) Exec(javascript string, timeout time.Duration) (*runtime.EvaluateReply, error) {
@@ -129,27 +210,10 @@ func (t *Tab) Exec(javascript string, timeout time.Duration) (*runtime.EvaluateR
 	return t.client.Runtime.Evaluate(ctx, evalArgs)
 }
 
-func (t *Tab) GetNewTab(timeout time.Duration) (*Tab, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
+func (t *Tab) GetClient() *cdp.Client {
+	return t.client
+}
 
-	newTarget, err := t.client.Target.TargetCreated(ctx)
-	if err != nil {
-		return nil, err
-	} else {
-		<-newTarget.Ready()
-
-		res, _ := newTarget.Recv()
-		if res.TargetInfo.Type == "page" {
-			var tab Tab
-
-			tab.Id = res.TargetInfo.TargetID
-			tab.conn = t.conn
-			tab.client = t.client
-
-			return &tab, nil
-		} else {
-			return nil, nil
-		}
-	}
+func (t *Tab) AttachHook(hook ClientHook) {
+	t.hooks = append(t.hooks, hook)
 }
