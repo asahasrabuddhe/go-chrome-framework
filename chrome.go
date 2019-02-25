@@ -3,26 +3,27 @@ package chrome
 import (
 	"context"
 	"fmt"
-	"github.com/go-cmd/cmd"
 	"github.com/mafredri/cdp"
 	dt "github.com/mafredri/cdp/devtool"
 	tgt "github.com/mafredri/cdp/protocol/target"
 	"github.com/mafredri/cdp/rpcc"
+	"log"
+	"os/exec"
 	"time"
 )
 
 type Chrome struct {
 	// command object to manage chrome process
-	command *cmd.Cmd
-	// chrome process status
-	status <-chan cmd.Status
+	command *exec.Cmd
 	// port on which chrome process is listening for dev tools protocol
 	port *int
-	// devtools protocol version
-	Version *dt.Version
+	// rpcc connection to chrome process
+	conn *rpcc.Conn
+	// browser client
+	client *cdp.Client
 }
 
-func (c *Chrome) Launch(path string, port *int, arguments []*string) error {
+func (c *Chrome) Launch(path string, port *int, arguments []*string) (*Tab, error) {
 	// if port is not specified, default to 9222
 	if port == nil {
 		c.port = Int(9222)
@@ -34,7 +35,6 @@ func (c *Chrome) Launch(path string, port *int, arguments []*string) error {
 	defaultArguments := []string{
 		//"--headless",
 		fmt.Sprintf("--remote-debugging-port=%v", IntValue(c.port)),
-		"--no-sandbox",
 		"--disable-gpu",
 		"--disable-sync",
 		"--disable-translate",
@@ -56,52 +56,87 @@ func (c *Chrome) Launch(path string, port *int, arguments []*string) error {
 	}
 
 	// create command with chrome path and arguments
-	c.command = cmd.NewCmd(path, defaultArguments...)
+	c.command = exec.Command(path, defaultArguments...)
+
 	// launch chrome process
-	c.status = c.command.Start()
-	// wait for chrome to launch
-	time.Sleep(5 * time.Second)
+	err := c.command.Start()
+	if err != nil {
+		log.Println("go-chrome-framework error: unable to launch chrome", err.Error())
+		return nil, err
+	}
+
+	// wait for process to launch
+	time.Sleep(3 * time.Second)
+
 	// attempt to connect with chrome over dev tools protocol
-	return c.connect(120 * time.Second)
+	tab, err := c.connect(120 * time.Second)
+	if err != nil {
+		log.Println("go-chrome-framework error: unable to connect to browser devtools protocol", err.Error())
+		return nil, err
+	}
+
+	return tab, err
 }
 
 func (c *Chrome) Wait() {
-	<-c.status
+	err := c.command.Wait()
+	if err != nil {
+		log.Fatalln("go-chrome-framework error: premature exit", err.Error())
+	}
 }
 
 func (c *Chrome) Terminate() error {
-	return c.command.Stop()
+	return c.command.Process.Kill()
 }
 
 func (c *Chrome) OpenTab(timeout time.Duration) (*Tab, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	// Initiate a new RPC connection to the Chrome DevTools Protocol target.
-	conn, err := rpcc.DialContext(ctx, c.Version.WebSocketDebuggerURL)
+	// create new target (tab)
+	createTarget, err := c.client.Target.CreateTarget(ctx, tgt.NewCreateTargetArgs("about:blank"))
 	if err != nil {
-		return nil, err
-	}
-	defer conn.Close() // Leaving connections open will leak memory.
-
-	client := cdp.NewClient(conn)
-
-	createCtx, err := client.Target.CreateBrowserContext(ctx)
-	if err != nil {
+		log.Println("go-chrome-framework error: unable to create new tab", err.Error())
 		return nil, err
 	}
 
-	createTargetArgs := tgt.NewCreateTargetArgs("about:blank").
-		SetBrowserContextID(createCtx.BrowserContextID)
+	// wrap the tab in an object and return
+	tab := new(Tab)
 
-	var tab *Tab
-	createTarget, err := client.Target.CreateTarget(ctx, createTargetArgs)
+	tab.id = createTarget.TargetID
+	tab.port = c.port
+
+	return tab, nil
+}
+
+func (c *Chrome) OpenIncognitoTab(timeout time.Duration) (*Tab, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	// create an empty browser context similar to incognito profile
+	createCtx, err := c.client.Target.CreateBrowserContext(ctx)
 	if err != nil {
+		log.Println("go-chrome-framework error: unable to create browser context for new incognito tab", err.Error())
 		return nil, err
 	}
 
-	tab = &Tab{}
-	tab.Id = createTarget.TargetID
+	// create new target (tab) based on above incognito profile
+	createTarget, err := c.client.Target.CreateTarget(
+		ctx,
+		tgt.NewCreateTargetArgs("about:blank").
+			SetBrowserContextID(createCtx.BrowserContextID),
+	)
+
+	if err != nil {
+		log.Println("go-chrome-framework error: unable to create new incognito tab", err.Error())
+		return nil, err
+	}
+
+	// wrap the tab in an object and return
+	tab := new(Tab)
+
+	tab.id = createTarget.TargetID
+	tab.port = c.port
 
 	return tab, nil
 }
@@ -110,29 +145,49 @@ func (c *Chrome) CloseTab(tab *Tab, timeout time.Duration) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	// Initiate a new RPC connection to the Chrome DevTools Protocol target.
-	conn, err := rpcc.DialContext(ctx, c.Version.WebSocketDebuggerURL)
-	if err != nil {
-		return err
-	}
-	defer conn.Close() // Leaving connections open will leak memory.
-
-	client := cdp.NewClient(conn)
-
-	_, err = client.Target.CloseTarget(ctx, tgt.NewCloseTargetArgs(tab.Id))
+	_, err := c.client.Target.CloseTarget(ctx, tgt.NewCloseTargetArgs(tab.id))
 	return err
 }
 
-func (c *Chrome) connect(timeout time.Duration) (err error) {
+func (c *Chrome) connect(timeout time.Duration) (*Tab, error) {
 	// prepare timeout context to cancel in case of a timeout
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	// get version for chrome instance to access debugger URL
-	c.Version, err = dt.New(fmt.Sprintf("http://127.0.0.1:%v", IntValue(c.port))).Version(ctx)
+	version, err := dt.New(fmt.Sprintf("http://127.0.0.1:%v", IntValue(c.port))).Version(ctx)
 	if err != nil {
-		return
+		log.Println("go-chrome-framework error: unable to connect to browser over devtools protocol", err.Error())
+		return nil, err
 	}
 
-	return
+	// Initiate a new RPC connection to the Chrome DevTools Protocol targetInfo.
+	c.conn, err = rpcc.DialContext(ctx, version.WebSocketDebuggerURL)
+	if err != nil {
+		log.Println("go-chrome-framework error: unable to initiate a new rpc connection to chrome", err.Error())
+		return nil, err
+	}
+
+	// browser client
+	c.client = cdp.NewClient(c.conn)
+
+	// as chrome launches with a new tab already opened, query the browser for a list of available targets to connect to
+	targets, err := c.client.Target.GetTargets(ctx)
+	if err != nil {
+		log.Println("go-chrome-framework error: unable to get list of targets", err.Error())
+		return nil, err
+	}
+
+	tab := new(Tab)
+
+	// iterate over all the targets returned
+	for _, targetInfo := range targets.TargetInfos {
+		// we want to connect to a page and not other target like service worker etc
+		if targetInfo.Type == "page" {
+			// wrap target in an object
+			tab.id = targetInfo.TargetID
+			tab.port = c.port
+		}
+	}
+
+	return tab, err
 }
