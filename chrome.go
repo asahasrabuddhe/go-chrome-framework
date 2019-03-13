@@ -54,7 +54,7 @@ func (c *Chrome) Launch(path string, port *int, arguments []*string) (*Tab, erro
 		"--enable-features=NetworkService,NetworkServiceInProcess",
 		"--enable-automation",
 		"--force-color-profile=srgb",
-		"--headless",
+		//"--headless",
 		"--hide-scrollbars",
 		"--ignore-certificate-errors",
 		"--metrics-recording-only",
