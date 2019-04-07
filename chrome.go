@@ -103,7 +103,12 @@ func (c *Chrome) Wait() {
 }
 
 func (c *Chrome) Terminate() error {
-	return c.command.Process.Kill()
+	// handle scenario when someone tries to terminate a browser that never launched
+	if c.command.Process != nil {
+		return c.command.Process.Kill()
+	}
+
+	return nil
 }
 
 func (c *Chrome) OpenTab(targetID tgt.ID, timeout time.Duration) *Tab {
