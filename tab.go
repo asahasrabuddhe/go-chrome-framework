@@ -109,7 +109,7 @@ func (t *Tab) Navigate(url string, timeout time.Duration) (bool, error) {
 	// wait for ajax to render
 	time.Sleep(5 * time.Second)
 
-	fmt.Printf("Page loaded with frame ID: %s\n", nav.FrameID)
+	log.Printf("go-chrome-framework: page loaded with frame ID: %s\n", nav.FrameID)
 
 	return true, nil
 }
@@ -180,9 +180,6 @@ func (t *Tab) CaptureScreenshot(timeout time.Duration) (string, error) {
 
 	deviceMetricsOverrideArgs := emulation.NewSetDeviceMetricsOverrideArgs(800, bodyBoxModel.Model.Height, 1.0, false)
 	err = t.client.Emulation.SetDeviceMetricsOverride(ctx, deviceMetricsOverrideArgs)
-
-	visibleSizeArgs := emulation.NewSetVisibleSizeArgs(800, bodyBoxModel.Model.Height)
-	err = t.client.Emulation.SetVisibleSize(ctx, visibleSizeArgs)
 
 	screenshotArgs := page.NewCaptureScreenshotArgs().SetFormat("png").SetQuality(80)
 	screenshot, err := t.client.Page.CaptureScreenshot(ctx, screenshotArgs)
