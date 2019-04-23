@@ -83,7 +83,7 @@ func (t *Tab) Navigate(url string, timeout time.Duration) (bool, error) {
 		log.Println("go-chrome-framework error: unable to open dom content event fired client", err.Error())
 		return false, err
 	}
-	defer domContent.Close()
+	defer closeRes(domContent)
 
 	// Enable events on the Page domain, it's often preferable to create
 	// event clients before enabling events so that we don't miss any.

@@ -7,6 +7,7 @@ import (
 	dt "github.com/mafredri/cdp/devtool"
 	tgt "github.com/mafredri/cdp/protocol/target"
 	"github.com/mafredri/cdp/rpcc"
+	"io"
 	"log"
 	"os/exec"
 	"time"
@@ -224,4 +225,11 @@ func (c *Chrome) connect(timeout time.Duration) (*Tab, error) {
 	}
 
 	return tab, err
+}
+
+func closeRes(close io.Closer) {
+	err := close.Close()
+	if err != nil {
+		log.Println("error occurred while trying to close resource", err.Error())
+	}
 }
