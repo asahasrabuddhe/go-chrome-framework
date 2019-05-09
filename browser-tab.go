@@ -8,8 +8,6 @@ import (
 )
 
 type BrowserTab interface {
-	connect(timeout time.Duration) error
-	disconnect() error
 	Navigate(url string, timeout time.Duration) (bool, error)
 	GetHTML(timeout time.Duration) (string, error)
 	CaptureScreenshot(timeout time.Duration) (string, error)
@@ -18,3 +16,5 @@ type BrowserTab interface {
 	GetTargetID() target.ID
 	AttachHook(hook ClientHook)
 }
+
+

@@ -6,12 +6,11 @@ import (
 )
 
 type Browser interface {
-	Launch(path string, port *int, arguments []*string) (*Tab, error)
+	Launch(path string, port *int, arguments []*string) (BrowserTab, error)
 	Wait()
 	Terminate() error
-	OpenTab(targetID target.ID, timeout time.Duration) *Tab
-	OpenNewTab(timeout time.Duration) (*Tab, error)
-	OpenNewIncognitoTab(timeout time.Duration) (*Tab, error)
-	CloseTab(tab *Tab, timeout time.Duration) error
-	connect(timeout time.Duration) (*Tab, error)
+	OpenTab(targetID target.ID, timeout time.Duration) BrowserTab
+	OpenNewTab(timeout time.Duration) (BrowserTab, error)
+	OpenNewIncognitoTab(timeout time.Duration) (BrowserTab, error)
+	CloseTab(tab BrowserTab, timeout time.Duration) error
 }

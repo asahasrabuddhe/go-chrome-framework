@@ -24,7 +24,7 @@ type Chrome struct {
 	client *cdp.Client
 }
 
-func (c *Chrome) Launch(path string, port *int, arguments []*string) (*Tab, error) {
+func (c *Chrome) Launch(path string, port *int, arguments []*string) (BrowserTab, error) {
 	// if port is not specified, default to 9222
 	if port == nil {
 		c.port = Int(9222)
@@ -112,7 +112,7 @@ func (c *Chrome) Terminate() error {
 	return nil
 }
 
-func (c *Chrome) OpenTab(targetID tgt.ID, timeout time.Duration) *Tab {
+func (c *Chrome) OpenTab(targetID tgt.ID, timeout time.Duration) BrowserTab {
 	_, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	// wrap the tab in an object and return
@@ -124,7 +124,7 @@ func (c *Chrome) OpenTab(targetID tgt.ID, timeout time.Duration) *Tab {
 	return tab
 }
 
-func (c *Chrome) OpenNewTab(timeout time.Duration) (*Tab, error) {
+func (c *Chrome) OpenNewTab(timeout time.Duration) (BrowserTab, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
@@ -144,7 +144,7 @@ func (c *Chrome) OpenNewTab(timeout time.Duration) (*Tab, error) {
 	return tab, nil
 }
 
-func (c *Chrome) OpenNewIncognitoTab(timeout time.Duration) (*Tab, error) {
+func (c *Chrome) OpenNewIncognitoTab(timeout time.Duration) (BrowserTab, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
@@ -176,15 +176,15 @@ func (c *Chrome) OpenNewIncognitoTab(timeout time.Duration) (*Tab, error) {
 	return tab, nil
 }
 
-func (c *Chrome) CloseTab(tab *Tab, timeout time.Duration) error {
+func (c *Chrome) CloseTab(tab BrowserTab, timeout time.Duration) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	_, err := c.client.Target.CloseTarget(ctx, tgt.NewCloseTargetArgs(tab.id))
+	_, err := c.client.Target.CloseTarget(ctx, tgt.NewCloseTargetArgs(tab.GetTargetID()))
 	return err
 }
 
-func (c *Chrome) connect(timeout time.Duration) (*Tab, error) {
+func (c *Chrome) connect(timeout time.Duration) (BrowserTab, error) {
 	// prepare timeout context to cancel in case of a timeout
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
