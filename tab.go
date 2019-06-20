@@ -209,6 +209,14 @@ func (t *Tab) Exec(javascript string, timeout time.Duration) (*runtime.EvaluateR
 }
 
 func (t *Tab) GetClient() *cdp.Client {
+	if t.client == nil {
+		err := t.connect(120 * time.Second)
+		if err != nil {
+			log.Println("unable to connect", err)
+			return nil
+		}
+	}
+
 	return t.client
 }
 

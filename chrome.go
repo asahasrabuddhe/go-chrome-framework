@@ -84,7 +84,7 @@ func (c *Chrome) Launch(path string, port *int, arguments []*string) (BrowserTab
 	}
 
 	// wait for process to launch
-	time.Sleep(3 * time.Second)
+	time.Sleep(5 * time.Second)
 
 	// attempt to connect with chrome over dev tools protocol
 	tab, err := c.connect(120 * time.Second)
@@ -189,7 +189,7 @@ func (c *Chrome) connect(timeout time.Duration) (BrowserTab, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	version, err := dt.New(fmt.Sprintf("http://127.0.0.1:%v", IntValue(c.port))).Version(ctx)
+	version, err := dt.New(fmt.Sprintf("http://localhost:%v", IntValue(c.port))).Version(ctx)
 	if err != nil {
 		log.Println("go-chrome-framework error: unable to connect to browser over devtools protocol", err.Error())
 		return nil, err
