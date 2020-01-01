@@ -1,4 +1,4 @@
-module go.ajitem.com/gcf
+module go.ajitem.com/gcf/v2
 
 go 1.12
 

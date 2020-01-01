@@ -28,10 +28,6 @@ type Tab struct {
 	hooks ClientHooks
 }
 
-type ClientHook func(c *cdp.Client) error
-
-type ClientHooks []ClientHook
-
 func (t *Tab) connect(timeout time.Duration) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -145,7 +141,7 @@ func (t *Tab) GetHTML(timeout time.Duration) (string, error) {
 	return result.OuterHTML, nil
 }
 
-func (t *Tab) CaptureScreenshot(timeout time.Duration) (string, error) {
+func (t *Tab) CaptureScreenshot(opts ScreenshotOpts, timeout time.Duration) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
@@ -178,7 +174,19 @@ func (t *Tab) CaptureScreenshot(timeout time.Duration) (string, error) {
 		return "", err
 	}
 
-	deviceMetricsOverrideArgs := emulation.NewSetDeviceMetricsOverrideArgs(800, bodyBoxModel.Model.Height, 1.0, false)
+	if opts.Width == 0 {
+		opts.Width = 800
+	}
+
+	if opts.Height == 0 {
+		opts.Height = bodyBoxModel.Model.Height
+	}
+
+	if opts.DeviceScaleFactor == 0 {
+		opts.DeviceScaleFactor = 1.0
+	}
+
+	deviceMetricsOverrideArgs := emulation.NewSetDeviceMetricsOverrideArgs(opts.Width, opts.Height, opts.DeviceScaleFactor, opts.Mobile)
 	err = t.client.Emulation.SetDeviceMetricsOverride(ctx, deviceMetricsOverrideArgs)
 
 	screenshotArgs := page.NewCaptureScreenshotArgs().SetFormat("png").SetQuality(80)
