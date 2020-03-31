@@ -4,5 +4,5 @@ go 1.12
 
 require (
 	github.com/gorilla/websocket v1.4.0 // indirect
-	github.com/mafredri/cdp v0.23.4
+	github.com/mafredri/cdp v0.26.0
 )
