@@ -24,7 +24,7 @@ type Chrome struct {
 	client *cdp.Client
 }
 
-func (c *Chrome) Launch(opts LaunchOpts) (BrowserTab, error) {
+func (c *Chrome) Launch(opts *LaunchOpts) (BrowserTab, error) {
 	// if port is not specified, default to 9222
 	if opts.port == nil {
 		c.port = Int(9222)

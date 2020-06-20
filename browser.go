@@ -6,7 +6,7 @@ import (
 )
 
 type Browser interface {
-	Launch(LaunchOpts) (BrowserTab, error)
+	Launch(*LaunchOpts) (BrowserTab, error)
 	Wait()
 	Terminate() error
 	OpenTab(target.ID, time.Duration) BrowserTab
