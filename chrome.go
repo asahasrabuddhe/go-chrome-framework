@@ -24,12 +24,12 @@ type Chrome struct {
 	client *cdp.Client
 }
 
-func (c *Chrome) Launch(path string, port *int, arguments []*string) (BrowserTab, error) {
+func (c *Chrome) Launch(opts LaunchOpts) (BrowserTab, error) {
 	// if port is not specified, default to 9222
-	if port == nil {
+	if opts.port == nil {
 		c.port = Int(9222)
 	} else {
-		c.port = port
+		c.port = opts.port
 	}
 
 	// prepare default arguments
@@ -55,7 +55,6 @@ func (c *Chrome) Launch(path string, port *int, arguments []*string) (BrowserTab
 		"--enable-features=NetworkService,NetworkServiceInProcess",
 		"--enable-automation",
 		"--force-color-profile=srgb",
-		"--headless",
 		"--hide-scrollbars",
 		"--ignore-certificate-errors",
 		"--metrics-recording-only",
@@ -69,12 +68,17 @@ func (c *Chrome) Launch(path string, port *int, arguments []*string) (BrowserTab
 	}
 
 	// if additional arguments are specified, use them alongside the default ones
-	if arguments != nil {
-		defaultArguments = StringValueSlice(append(StringSlice(defaultArguments), arguments...))
+	if opts.arguments != nil {
+		defaultArguments = StringValueSlice(append(StringSlice(defaultArguments), StringSlice(opts.arguments)...))
+	}
+
+	// if headless is true, launch in headless mode
+	if opts.headless {
+		defaultArguments = append(defaultArguments, "--headless")
 	}
 
 	// create command with chrome path and arguments
-	c.command = exec.Command(path, defaultArguments...)
+	c.command = exec.Command(opts.path, defaultArguments...)
 
 	// launch chrome process
 	err := c.command.Start()
@@ -149,7 +153,7 @@ func (c *Chrome) OpenNewIncognitoTab(timeout time.Duration) (BrowserTab, error) 
 	defer cancel()
 
 	// create an empty browser context similar to incognito profile
-	createCtx, err := c.client.Target.CreateBrowserContext(ctx)
+	createCtx, err := c.client.Target.CreateBrowserContext(ctx, tgt.NewCreateBrowserContextArgs())
 	if err != nil {
 		log.Println("go-chrome-framework error: unable to create browser context for new incognito tab", err.Error())
 		return nil, err
