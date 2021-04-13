@@ -28,3 +28,10 @@ func (l *LaunchOpts) SetArguments(arguments ...string) {
 func (l *LaunchOpts) SetHeadless(headless bool) {
 	l.headless = headless
 }
+
+type ScreenshotOpts struct {
+	Width             int
+	Height            int
+	DeviceScaleFactor float64
+	Mobile            bool
+}

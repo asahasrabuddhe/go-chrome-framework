@@ -9,15 +9,29 @@ import (
 	"github.com/mafredri/cdp/protocol/emulation"
 	"github.com/mafredri/cdp/protocol/page"
 	"github.com/mafredri/cdp/protocol/runtime"
-	tgt "github.com/mafredri/cdp/protocol/target"
+	"github.com/mafredri/cdp/protocol/target"
 	"github.com/mafredri/cdp/rpcc"
 	"log"
 	"time"
 )
 
-type Tab struct {
+type Tab interface {
+	Navigate(url string, timeout time.Duration) (bool, error)
+	GetHTML(timeout time.Duration) (string, error)
+	CaptureScreenshot(opts ScreenshotOpts, timeout time.Duration) (string, error)
+	Exec(javascript string, timeout time.Duration) (*runtime.EvaluateReply, error)
+	GetClient() *cdp.Client
+	GetTargetID() target.ID
+	AttachHook(hook ClientHook)
+}
+
+type ClientHook func(c *cdp.Client) error
+
+type ClientHooks []ClientHook
+
+type tab struct {
 	// target id of a single tab
-	id tgt.ID
+	id target.ID
 	// port on which chrome process is listening for dev tools protocol
 	port *int
 	// connection to connect with the browser
@@ -28,7 +42,7 @@ type Tab struct {
 	hooks ClientHooks
 }
 
-func (t *Tab) connect(timeout time.Duration) error {
+func (t *tab) connect(timeout time.Duration) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
@@ -58,11 +72,11 @@ func (t *Tab) connect(timeout time.Duration) error {
 	return nil
 }
 
-func (t *Tab) disconnect() error {
+func (t *tab) disconnect() error {
 	return t.conn.Close()
 }
 
-func (t *Tab) Navigate(url string, timeout time.Duration) (bool, error) {
+func (t *tab) Navigate(url string, timeout time.Duration) (bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
@@ -110,7 +124,7 @@ func (t *Tab) Navigate(url string, timeout time.Duration) (bool, error) {
 	return true, nil
 }
 
-func (t *Tab) GetHTML(timeout time.Duration) (string, error) {
+func (t *tab) GetHTML(timeout time.Duration) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
@@ -141,7 +155,7 @@ func (t *Tab) GetHTML(timeout time.Duration) (string, error) {
 	return result.OuterHTML, nil
 }
 
-func (t *Tab) CaptureScreenshot(opts ScreenshotOpts, timeout time.Duration) (string, error) {
+func (t *tab) CaptureScreenshot(opts ScreenshotOpts, timeout time.Duration) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
@@ -201,7 +215,7 @@ func (t *Tab) CaptureScreenshot(opts ScreenshotOpts, timeout time.Duration) (str
 	return image, nil
 }
 
-func (t *Tab) Exec(javascript string, timeout time.Duration) (*runtime.EvaluateReply, error) {
+func (t *tab) Exec(javascript string, timeout time.Duration) (*runtime.EvaluateReply, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
@@ -216,7 +230,7 @@ func (t *Tab) Exec(javascript string, timeout time.Duration) (*runtime.EvaluateR
 	return t.client.Runtime.Evaluate(ctx, evalArgs)
 }
 
-func (t *Tab) GetClient() *cdp.Client {
+func (t *tab) GetClient() *cdp.Client {
 	if t.client == nil {
 		err := t.connect(120 * time.Second)
 		if err != nil {
@@ -228,10 +242,10 @@ func (t *Tab) GetClient() *cdp.Client {
 	return t.client
 }
 
-func (t *Tab) GetTargetID() tgt.ID {
+func (t *tab) GetTargetID() target.ID {
 	return t.id
 }
 
-func (t *Tab) AttachHook(hook ClientHook) {
+func (t *tab) AttachHook(hook ClientHook) {
 	t.hooks = append(t.hooks, hook)
 }
