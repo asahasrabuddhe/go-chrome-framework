@@ -3,6 +3,7 @@ package chrome
 import (
 	"context"
 	"fmt"
+	"github.com/flowchartsman/retry"
 	"github.com/mafredri/cdp"
 	"github.com/mafredri/cdp/devtool"
 	"github.com/mafredri/cdp/protocol/target"
@@ -101,9 +102,6 @@ func (c *chrome) Launch(opts *LaunchOpts) (Tab, error) {
 		log.Println("go-chrome-framework error: unable to launch chrome", err.Error())
 		return nil, err
 	}
-
-	// wait for process to launch
-	time.Sleep(5 * time.Second)
 
 	// attempt to connect with chrome over dev tools protocol
 	tab, err := c.connect(120 * time.Second)
@@ -208,39 +206,50 @@ func (c *chrome) connect(timeout time.Duration) (Tab, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	version, err := devtool.New(fmt.Sprintf("http://localhost:%v", IntValue(c.port))).Version(ctx)
-	if err != nil {
-		log.Println("go-chrome-framework error: unable to connect to browser over devtools protocol", err.Error())
-		return nil, err
-	}
-
-	// Initiate a new RPC connection to the chrome DevTools Protocol targetInfo.
-	c.conn, err = rpcc.DialContext(ctx, version.WebSocketDebuggerURL)
-	if err != nil {
-		log.Println("go-chrome-framework error: unable to initiate a new rpc connection to chrome", err.Error())
-		return nil, err
-	}
-
-	// browser client
-	c.client = cdp.NewClient(c.conn)
-
-	// as chrome launches with a new tab already opened, query the browser for a list of available targets to connect to
-	targets, err := c.client.Target.GetTargets(ctx)
-	if err != nil {
-		log.Println("go-chrome-framework error: unable to get list of targets", err.Error())
-		return nil, err
-	}
-
 	tab := new(tab)
 
-	// iterate over all the targets returned
-	for _, targetInfo := range targets.TargetInfos {
-		// we want to connect to a page and not other target like service worker etc
-		if targetInfo.Type == "page" {
-			// wrap target in an object
-			tab.id = targetInfo.TargetID
-			tab.port = c.port
+	rt := retry.NewRetrier(5, 100*time.Millisecond, time.Second)
+	err := rt.RunContext(ctx, func(ctx context.Context) error {
+		// use the devtool to create a Page Target
+		version, err := devtool.New(fmt.Sprintf("http://localhost:%v", IntValue(c.port))).Version(ctx)
+		if err != nil {
+			log.Println("go-chrome-framework error: unable to connect to browser over devtools protocol", err.Error())
+			return err
 		}
+
+		// Initiate a new RPC connection to the chrome DevTools Protocol targetInfo.
+		c.conn, err = rpcc.DialContext(ctx, version.WebSocketDebuggerURL)
+		if err != nil {
+			log.Println("go-chrome-framework error: unable to initiate a new rpc connection to chrome", err.Error())
+			return err
+		}
+
+		// browser client
+		c.client = cdp.NewClient(c.conn)
+
+		// as chrome launches with a new tab already opened, query the browser for a list of available targets to connect to
+		targets, err := c.client.Target.GetTargets(ctx)
+		if err != nil {
+			log.Println("go-chrome-framework error: unable to get list of targets", err.Error())
+			return err
+		}
+
+		// iterate over all the targets returned
+		for _, targetInfo := range targets.TargetInfos {
+			// we want to connect to a page and not other target like service worker etc
+			if targetInfo.Type == "page" {
+				// wrap target in an object
+				tab.id = targetInfo.TargetID
+				tab.port = c.port
+
+				break
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	return tab, err

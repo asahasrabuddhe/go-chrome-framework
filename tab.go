@@ -111,13 +111,11 @@ func (t *tab) Navigate(url string, timeout time.Duration) (bool, error) {
 	}
 
 	// Wait until we have a DOMContentEventFired event.
-	if _, err = domContent.Recv(); err != nil {
+	_, err = domContent.Recv()
+	if err != nil {
 		log.Println("go-chrome-framework error: unable to get dom content event", err.Error())
 		return false, err
 	}
-
-	// wait for ajax to render
-	time.Sleep(5 * time.Second)
 
 	log.Printf("go-chrome-framework: page loaded with frame ID: %s\n", nav.FrameID)
 
