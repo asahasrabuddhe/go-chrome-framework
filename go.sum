@@ -12,6 +12,7 @@ github.com/mafredri/cdp v0.23.4/go.mod h1:hgdiA0yp1uqhSaDOHJWPgXpMbh+LAfUdD9vbN2
 github.com/mafredri/cdp v0.28.0 h1:v/LWC3GpactA1EaS737bl+eNUhvOaDh+FzvyoDxNM5o=
 github.com/mafredri/cdp v0.28.0/go.mod h1:11586MgpyJuQR4qiXQ/7HBame2FtGIBzymaUHZcQ0PY=
 github.com/mafredri/cdp v0.31.0/go.mod h1:YTCwLXkZSa18SGSIxCPMOGZcUJODZSNlAhiMqbyxWJg=
+github.com/mafredri/cdp v0.32.0/go.mod h1:YTCwLXkZSa18SGSIxCPMOGZcUJODZSNlAhiMqbyxWJg=
 github.com/mafredri/go-lint v0.0.0-20180911205320-920981dfc79e/go.mod h1:k/zdyxI3q6dup24o8xpYjJKTCf2F7rfxLp6w/efTiWs=
 github.com/yuin/goldmark v1.1.25/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.2.1/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
